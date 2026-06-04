@@ -1,0 +1,2173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetaMask Vault Finder</title>
+    <link rel="icon" type="image/x-icon" href="icon.ico">
+    <link rel="stylesheet" href="styles.css" />
+    <script src="js/ethers.umd.min.js" type="application/javascript"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>MetaMask Vault Finder</h1>
+            <p>Find and analyze MetaMask vault data from any file with intelligent search</p>
+        </div>
+
+        <div class="main-grid">
+            <!-- File Upload Section -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">📁</div>
+                    <h2>File Upload</h2>
+                </div>
+                <div class="card-description">
+                    Drag and drop your file or click to browse
+                </div>
+                
+                <div class="drag-drop-area" id="dragDropArea">
+                    <div class="upload-icon"></div>
+                    <div id="uploadText">
+                        <p><strong>Drop your file here</strong></p>
+                        <p style="font-size: 0.8rem; color: #a0a0a0; margin-top: 5px;">or click to browse</p>
+                    </div>
+                    <div id="fileInfo" class="file-info hidden">
+                        <div class="file-name" id="fileName"></div>
+                        <div class="file-size" id="fileSize"></div>
+                    </div>
+                </div>
+                <input type="file" id="fileInput" style="display: none;">
+                
+                <!-- Snappy Decompression Button -->
+                <button class="btn btn-small" id="snappyDecompBtn" style="margin-top: 10px; background: #666666; cursor: not-allowed;" disabled>
+                    🗜️ Snappy Decompression
+                </button>
+            </div>
+
+            <!-- Search Configuration -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">🔍</div>
+                    <h2>Search Configuration</h2>
+                </div>
+                <div class="card-description">
+                    Configure search keywords and minimum match count
+                </div>
+
+                <!-- Keywords Section -->
+                <div class="keywords-section">
+                    <div class="keywords-header" style="margin-bottom: 10px;">
+                        <span style="display: inline-flex; align-items: center; gap: 8px;">
+                            <label style="margin: 0;">Search Keywords</label>
+                            <button class="btn btn-small" id="editKeywordsBtn" style="background: #ff6b35; color: white; padding: 2px 8px; min-width: 70px; margin-left: 5px;">
+                                ✏️ Edit Words
+                            </button>
+                        </span>
+                    </div>
+                    
+                    <div class="keywords-container" id="keywordsContainer">
+                        <!-- Keywords will be populated by JavaScript -->
+                    </div>
+
+                    <div class="keyword-input-container hidden" id="keywordInputContainer">
+                        <input type="text" class="input" id="keywordInput" placeholder="Add new keyword...">
+                        <button class="btn btn-small" id="addKeywordBtn">Add</button>
+                    </div>
+                </div>
+
+                <!-- Minimum Word Count -->
+                <div class="min-words-section">
+                    <label for="minWords">Minimum Keywords Found</label>
+                    <select class="input" id="minWords" style="padding: 8px; width: 80px;">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4" selected>4</option>
+                        <option value="5">5</option>
+                        <option value="6">6</option>
+                        <option value="7">7</option>
+                        <option value="8">8</option>
+                        <option value="9">9</option>
+                    </select>
+                    <div class="min-words-description" id="minWordsDescription">
+                        Lines must contain at least 4 keywords to be included in results
+                    </div>
+                </div>
+
+                <button class="btn search-btn" id="searchBtn" disabled>
+                    🔍 Search Vault Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Search Results -->
+        <div class="card results-card">
+            <div class="results-header">
+                <div class="card-header">
+                    <div class="card-icon">📄</div>
+                    <h2>Found Data</h2>
+                </div>
+                <div class="results-count hidden" id="resultsCount">0 results</div>
+            </div>
+            
+            <div id="resultsContainer">
+                <div class="no-results">
+                    <div class="no-results-icon">⚠️</div>
+                    <p>No results found. Upload a file and search to see results here.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vault Data Compiler -->
+        <div class="card" style="margin-top: 30px;">
+            <div class="card-header">
+                <div class="card-icon">🔧</div>
+                <h2>Data Compiler</h2>
+            </div>
+            <div class="card-description">
+                Manual reconstruction of MetaMask vault using found data
+            </div>
+
+            <div class="vault-field">
+                <label for="vaultData">data <span style="color: #a0a0a0; font-weight: normal; font-size: 0.8rem;">(encrypted data - longest field, length varies by number and type of accounts)</span></label>
+                <textarea id="vaultData" placeholder="Enter data..."></textarea>
+            </div>
+
+            <div class="vault-field">
+                <label for="vaultIv">iv <span style="color: #a0a0a0; font-weight: normal; font-size: 0.8rem;">(initialization vector - 24 characters)</span></label>
+                <input type="text" class="input" id="vaultIv" placeholder="Enter iv...">
+                <div id="vaultIvError" class="error-text" style="display:none;">IV must be 24 base64 characters (A–Z, a–z, 0–9, +, /, =).</div>
+            </div>
+
+            <div class="vault-field">
+                <label for="vaultKeyMetadata">keyMetadata <span style="color: #a0a0a0; font-weight: normal; font-size: 0.8rem;">(algorithm and parameters - old MetaMask data: 10000 iterations or missing, new data: 600000 iterations)</span></label>
+                <textarea id="vaultKeyMetadata" placeholder="Enter keyMetadata..."></textarea>
+                <div class="keymetadata-buttons">
+                    <button class="btn btn-small btn-iterations-new" id="keyMetadata600000">⚡ 600,000 (New)</button>
+                    <button class="btn btn-small btn-iterations-old" id="keyMetadata10000">⏳ 10,000 (Old)</button>
+                    <button class="btn btn-small btn-delete" id="clearKeyMetadata">🗑️ Clear</button>
+                </div>
+            </div>
+
+            <div class="vault-field">
+                <label for="vaultSalt">salt <span style="color: #a0a0a0; font-weight: normal; font-size: 0.8rem;">(44 characters)</span></label>
+                <input type="text" class="input" id="vaultSalt" placeholder="Enter salt...">
+                <div id="vaultSaltError" class="error-text" style="display:none;">Salt must be 44 base64 characters (A–Z, a–z, 0–9, +, /, =).</div>
+            </div>
+
+            <div class="vault-field" style="margin-top: 20px;">
+                <label>Compiled Output</label>
+                <div class="compiled-output" id="compiledOutput">Compiled vault data will appear here...</div>
+                <div class="button-group">
+                    <button class="btn btn-small btn-copy" id="copyCompiledBtn">📋 Copy to Clipboard</button>
+                    <button class="btn btn-small btn-save" id="saveCompiledBtn">💾 Save as .txt</button>
+                    <button class="btn btn-small btn-delete" id="clearAllBtn">🗑️ Clear All</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vault Decryptor -->
+        <div class="card" style="margin-top: 30px;">
+            <div class="card-header">
+                <div class="card-icon">🔓</div>
+                <h2>Vault Decryptor</h2>
+            </div>
+            <div class="card-description">
+                Decrypt MetaMask vault data to recover seed phrases using your password
+            </div>
+
+            <div class="vault-field">
+                <label for="vaultDataInput">Vault Data (JSON):</label>
+                <textarea id="vaultDataInput" class="input" rows="4" placeholder='{"data":"...","iv":"...","salt":"..."}'></textarea>
+            </div>
+            <div class="vault-field" style="display: flex; align-items: center; gap: 10px;">
+                <div style="position: relative; width: 200px; max-width: 100%;">
+                    <label for="vaultPassword">Password:</label>
+                    <div style="position: relative;">
+                        <input type="password" id="vaultPassword" class="input" placeholder="Enter password" style="width: 100%; padding-right: 40px; box-sizing: border-box; height: 40px;">
+                        <span id="togglePassword" class="password-toggle" title="Show password">👁️</span>
+                        <span id="monkeyEmoji" class="monkey-emoji" title="Click to hide password" style="display: none;">🙈</span>
+                    </div>
+                </div>
+            </div>
+            <button id="decryptBtn" class="btn compile-btn" style="margin-top: 15px;">
+                <span class="btn-icon">🔑</span> Decrypt Vault Data
+            </button>
+
+            <div class="vault-field" style="margin-top: 20px;">
+                <label>Decrypted Wallet Information</label>
+                <div class="compiled-output" id="decryptedOutput">Decrypted seed phrases and private keys will appear here...</div>
+                <div id="securityWarning" style="margin: 15px 0; display: none;">
+                    <div style="color: #ffd700; font-weight: bold;">⚠️ SECURITY WARNING:</div>
+                    <div style="color: #ff4444;">
+                        Keep this information secure and private!<br>
+                        Never share your seed phrase or private keys with anyone.
+                    </div>
+                </div>
+                <div class="button-group">
+                    <button class="btn btn-small btn-copy" id="copyDecryptedBtn">📋 Copy Wallet Info</button>
+                    <button class="btn btn-small btn-save" id="saveDecryptedBtn">💾 Save as .txt</button>
+                    <button class="btn btn-small btn-delete" id="clearDecryptorBtn">🗑️ Clear All</button>
+                </div>
+                <div style="
+                    margin-top: 15px; 
+                    padding: 12px 15px; 
+                    background-color: rgba(255, 243, 205, 0.7); 
+                    border: 1px solid rgba(255, 193, 7, 0.3);
+                    border-radius: 8px; 
+                    color: #000000;
+                    backdrop-filter: blur(2px);
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    transition: all 0.3s ease;
+                ">
+                    <strong>Note:</strong> My Vault Decryptor is in development. If you encounter any issues, please use the official version:
+                    <a href="https://github.com/MetaMask/vault-decryptor" 
+                       target="_blank" 
+                       style="color: #1a237e; text-decoration: none; font-weight: 500;"
+                       title="Click to open official MetaMask GitHub">
+                       <strong>MetaMask Vault Decryptor</strong>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Card -->
+    <div class="card" style="margin-top: 30px; max-width: 1200px; margin-left: auto; margin-right: auto;">
+        <div class="card-header">
+            <div class="card-icon">ℹ️</div>
+            <h2 style="color: #ff6b35;">About Project</h2>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
+            <div class="card-description" style="margin: 0; color: #ffffff; font-size: 1rem; display: flex; align-items: center;">
+                <span>Created with <span style="color: #ff6b35;">❤️</span> for the <span style="color: #ff6b35;">MetaMask Community</span> 🦊</span>
+            </div>
+            <div style="position: relative; display: flex; align-items: center;">
+                <button id="supportBtn" class="btn" style="background: #ff6b35; color: #ffffff; padding: 6px 16px; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 5px; margin-left: 15px;" title="Show author's crypto addresses">
+                    <span>☕ Support My Work</span>
+                </button>
+                <div style="position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 5px 10px; border-radius: 4px; font-size: 0.8rem; white-space: nowrap; margin-bottom: 5px; opacity: 0; visibility: hidden; transition: all 0.2s; pointer-events: none;">
+                    Show author's crypto addresses
+                    <div style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 5px solid #333;"></div>
+                </div>
+            </div>
+            <style>
+                #supportBtn:hover + div {
+                    opacity: 1;
+                    visibility: visible;
+                }
+            </style>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                 by <a href="https://community.metamask.io/g/Guides" target="_blank" style="color: #ff6b35; text-decoration: none;">MetaMask Guide</a>
+                <a href="https://community.metamask.io/u/luigi/summary" target="_blank" rel="noopener noreferrer" style="color: #4CAF50; font-weight: 500; text-decoration: none;">Luigi</a>
+                <img src="images/Luigi.png" style="width: 20px; height: 20px; object-fit: contain;">
+                <span style="color: #1a73e8; margin-left: 2px;">TG: <a href="https://t.me/Luigi_SK" target="_blank" rel="noopener noreferrer" style="color: #1a73e8; text-decoration: none;" title="Click and message me if you have any questions">Luigi_SK</a></span>
+            </div>
+            <div style="color: #ffffff; font-size: 1rem; display: flex; align-items: center; height: 100%;">
+                <span>MetaMask Vault Finder v1.55</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Donation Modal -->
+    <div id="donationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.8); z-index: 1000; justify-content: center; align-items: center;">
+        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 30px; max-width: 500px; width: 90%; position: relative;">
+            <button id="closeModal" style="position: absolute; top: 15px; right: 15px; background: none; border: none; color: #a0a0a0; font-size: 24px; cursor: pointer;">×</button>
+            <h2 style="color: #ff6b35; margin-bottom: 20px; text-align: center;">Support My Work</h2>
+            <p style="color: #f5f5f5; text-align: center; margin-bottom: 25px;">If you found this tool helpful, consider supporting me with a donation. Thank you! 🙏</p>
+            
+            <div style="margin-bottom: 25px;">
+                <h3 style="color: #f5f5f5; margin-bottom: 15px; text-align: center;">Ethereum (ETH/ERC-20)</h3>
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <div style="flex: 1; background: #2a2a2a; padding: 12px; border-radius: 8px; word-break: break-all; font-family: monospace; color: #ff6b35; font-size: 0.85rem;">
+                        0x8A00f43C099bEB3F5d3C289e8b93c71c32B4d52e
+                    </div>
+                    <button class="btn-copya" onclick="copyToClipboard('0x8A00f43C099bEB3F5d3C289e8b93c71c32B4d52e', event)" style="padding: 10px 10px; font-size: 0.8rem; white-space: nowrap;">
+                        COPY
+                    </button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+                <h3 style="color: #f5f5f5; margin-bottom: 15px; text-align: center;">Bitcoin (BTC)</h3>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="flex: 1; background: #2a2a2a; padding: 12px; border-radius: 8px; word-break: break-all; font-family: monospace; color: #ff6b35; font-size: 0.85rem;">
+                        bc1qgug43r48cceja46j9nmj686wps5vad8appytsh
+                    </div>
+                    <button class="btn-copya" onclick="copyToClipboard('bc1qgug43r48cceja46j9nmj686wps5vad8appytsh', event)" style="padding: 10px 10px; font-size: 0.8rem; white-space: nowrap;">
+                        COPY
+                    </button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+                <h3 style="color: #f5f5f5; margin-bottom: 15px; text-align: center;">Dogecoin (DOGE)</h3>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="flex: 1; background: #2a2a2a; padding: 12px; border-radius: 8px; word-break: break-all; font-family: monospace; color: #ff6b35; font-size: 0.85rem;">
+                        DH5CjTzDPmrSgPqiKnpKurUmeVvU7w5C5P
+                    </div>
+                    <button class="btn-copya" onclick="copyToClipboard('DH5CjTzDPmrSgPqiKnpKurUmeVvU7w5C5P', event)" style="padding: 10px 10px; font-size: 0.8rem; white-space: nowrap;">
+                        COPY
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Snappy Decompression Modal -->
+    <div id="snappyModal" class="snappy-modal">
+        <div class="snappy-modal-content">
+            <span class="snappy-modal-icon">🗜️</span>
+            <h2 class="snappy-modal-title">Snappy Decompression</h2>
+            <p class="snappy-modal-text">The file will be more readable after decompression.<br>
+            Would you like to attempt Snappy decompression <br>on this file <span id="snappyFileName" style="color: #ff4444; font-weight: bold;"></span>?</p>
+            <div style="margin-bottom: 20px;"></div>
+            <div class="snappy-modal-buttons">
+                <button class="snappy-modal-btn snappy-modal-btn-yes" id="snappyYesBtn">Yes</button>
+                <button class="snappy-modal-btn snappy-modal-btn-no" id="snappyNoBtn">No</button>
+            </div>
+            <p class="snappy-modal-subtext" style="color: #ff4444; font-weight: bold; margin-top: 20px; font-size: 0.9em;">Note: This function is designed specifically for Firefox session files (starting with 'sNaPpY'). Working with a copy of your file.</p>
+        </div>
+    </div>
+
+    <script>
+        // Donation modal functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const modal = document.getElementById('donationModal');
+            const btn = document.getElementById('supportBtn');
+            const span = document.getElementById('closeModal');
+            
+            // Funkcia na prehratie thank you zvuku
+            function playThankYouSound() {
+                try {
+                    const audio = new Audio('sounds/thankyou.mp3');
+                    audio.volume = 0.5; // 50% hlasitosť
+                    audio.play().catch(err => {
+                        console.log('Could not play thank you sound:', err);
+                    });
+                } catch (err) {
+                    console.log('Error creating thank you audio:', err);
+                }
+            }
+            
+            btn.onclick = function() {
+                modal.style.display = 'flex';
+            }
+            
+            // Prehrá zvuk pri zatvorení cez X
+            span.onclick = function() {
+                modal.style.display = 'none';
+                playThankYouSound();
+            }
+            
+            // Prehrá zvuk pri zatvorení kliknutím mimo
+            window.onclick = function(event) {
+                if (event.target == modal) {
+                    modal.style.display = 'none';
+                    playThankYouSound();
+                }
+            }
+        });
+
+        // Copy to clipboard function
+        function copyToClipboard(text, event) {
+            navigator.clipboard.writeText(text).then(function() {
+                // Show copied feedback on the specific button that was clicked
+                event.target.innerHTML = '✅';
+                setTimeout(() => {
+                    event.target.innerHTML = 'COPY';
+                }, 2000);
+            }).catch(function(err) {
+                console.error('Could not copy text: ', err);
+                alert('Failed to copy address to clipboard');
+            });
+        }
+    </script>
+
+    <script>
+        class VaultExtractor {
+            constructor() {
+                this.file = null;
+                this.fileContent = null; // Cache file content
+                this.keywords = ["salt", "data", "iv", "PBKDF2", "params", "iterations", "keyMetadata"];
+                // Povinné keywords - musia byť prítomné v každom výsledku
+                this.requiredKeywords = ["data", "iv", "salt"];
+                this.editingKeywords = false;
+                this.minWordCount = 4;
+                this.searchResults = [];
+                this.currentFindQuery = "";
+                this.currentLines = null;
+                this.currentViewer = null;
+                this.isPlayingSound = false;
+                this.hasPlayedDataFoundSound = false;
+                
+                this.initializeElements();
+                this.bindEvents();
+                this.renderKeywords();
+                // Initialize min words dropdown with correct options
+                this.minWordsInput.innerHTML = '';
+                for (let i = 1; i <= this.keywords.length; i++) {
+                    const option = document.createElement('option');
+                    option.value = i;
+                    option.textContent = i;
+                    option.selected = (i === this.minWordCount);
+                    this.minWordsInput.appendChild(option);
+                }
+                this.updateMinWordsDescription();
+                this.setupSnappyDecompression();
+            }
+
+            initializeElements() {
+                // Vault Decryptor elements
+                this.vaultDataInput = document.getElementById("vaultDataInput");
+                this.vaultPassword = document.getElementById("vaultPassword");
+                this.decryptBtn = document.getElementById("decryptBtn");
+                this.decryptedOutput = document.getElementById("decryptedOutput");
+                this.copyDecryptedBtn = document.getElementById("copyDecryptedBtn");
+                this.saveDecryptedBtn = document.getElementById("saveDecryptedBtn");
+                this.clearDecryptorBtn = document.getElementById("clearDecryptorBtn");
+                
+                // File upload elements
+                this.dragDropArea = document.getElementById("dragDropArea");
+                this.fileInput = document.getElementById("fileInput");
+                this.uploadText = document.getElementById("uploadText");
+                this.fileInfo = document.getElementById("fileInfo");
+                this.fileName = document.getElementById("fileName");
+                this.fileSize = document.getElementById("fileSize");
+                this.keywordsContainer = document.getElementById("keywordsContainer");
+                this.editKeywordsBtn = document.getElementById("editKeywordsBtn");
+                this.keywordInputContainer = document.getElementById("keywordInputContainer");
+                this.keywordInput = document.getElementById("keywordInput");
+                this.addKeywordBtn = document.getElementById("addKeywordBtn");
+                this.minWordsInput = document.getElementById("minWords");
+                this.minWordsDescription = document.getElementById("minWordsDescription");
+                this.searchBtn = document.getElementById("searchBtn");
+                this.resultsContainer = document.getElementById("resultsContainer");
+                this.resultsCount = document.getElementById("resultsCount");
+
+                // Vault Data Compiler elements
+                this.vaultData = document.getElementById("vaultData");
+                this.vaultIv = document.getElementById("vaultIv");
+                this.vaultKeyMetadata = document.getElementById("vaultKeyMetadata");
+                this.vaultSalt = document.getElementById("vaultSalt");
+                this.vaultIvError = document.getElementById("vaultIvError");
+                this.vaultSaltError = document.getElementById("vaultSaltError");
+                this.keyMetadata600000Btn = document.getElementById("keyMetadata600000");
+                this.keyMetadata10000Btn = document.getElementById("keyMetadata10000");
+                this.clearKeyMetadataBtn = document.getElementById("clearKeyMetadata");
+                this.copyCompiledBtn = document.getElementById("copyCompiledBtn");
+                this.compiledOutput = document.getElementById("compiledOutput");
+
+                // Snappy Decompression elements
+                this.snappyDecompBtn = document.getElementById("snappyDecompBtn");
+                this.snappyModal = document.getElementById("snappyModal");
+                this.snappyYesBtn = document.getElementById("snappyYesBtn");
+                this.snappyNoBtn = document.getElementById("snappyNoBtn");
+            }
+
+            setupVaultDecryptorEvents() {}
+            
+            bindEvents() {
+                // Vault decryptor events
+                this.setupVaultDecryptorEvents();
+                
+                // Existing events
+                this.dragDropArea.addEventListener("dragover", this.handleDragOver.bind(this));
+                this.dragDropArea.addEventListener("dragleave", this.handleDragLeave.bind(this));
+                this.dragDropArea.addEventListener("drop", this.handleDrop.bind(this));
+                this.dragDropArea.addEventListener("click", () => this.fileInput.click());
+                
+                this.fileInput.addEventListener("change", this.handleFileSelect.bind(this));
+                
+                this.editKeywordsBtn.addEventListener("click", this.toggleKeywordEditing.bind(this));
+                this.addKeywordBtn.addEventListener("click", this.addKeyword.bind(this));
+                this.keywordInput.addEventListener("keypress", (e) => {
+                    if (e.key === "Enter") this.addKeyword();
+                });
+                
+                this.minWordsInput.addEventListener("input", this.updateMinWords.bind(this));
+                this.searchBtn.addEventListener("click", this.searchFile.bind(this));
+
+                // Vault Data Compiler events
+                this.keyMetadata600000Btn.addEventListener("click", () => {
+                    this.vaultKeyMetadata.value = '{"algorithm":"PBKDF2","params":{"iterations":600000}}';
+                    setTimeout(() => this.compileVaultData(), 100);
+                });
+
+                this.keyMetadata10000Btn.addEventListener("click", () => {
+                    this.vaultKeyMetadata.value = '{"algorithm":"PBKDF2","params":{"iterations":10000}}';
+                    setTimeout(() => this.compileVaultData(), 100);
+                });
+
+                this.clearKeyMetadataBtn.addEventListener("click", () => {
+                    this.vaultKeyMetadata.value = "";
+                    setTimeout(() => this.compileVaultData(), 100);
+                });
+
+                // Add input and paste event listeners for auto-compilation and validation
+                const handleInput = () => {
+                    this.validateSalt();
+                    this.compileVaultData();
+                    this.updateCompileButtonState();
+                };
+                
+                this.vaultData.addEventListener('input', handleInput);
+                this.vaultIv.addEventListener('input', handleInput);
+                this.vaultKeyMetadata.addEventListener('input', handleInput);
+                this.vaultSalt.addEventListener('input', handleInput);
+                
+                // Handle paste events for the salt field
+                this.vaultSalt.addEventListener('paste', (e) => {
+                    // Let the paste complete
+                    setTimeout(() => {
+                        handleInput();
+                    }, 0);
+                });
+                
+                this.copyCompiledBtn.addEventListener("click", this.copyCompiledData.bind(this));
+                document.getElementById('saveCompiledBtn').addEventListener('click', this.saveCompiledData.bind(this));
+                
+                // Clear All button
+                document.getElementById('clearAllBtn').addEventListener('click', () => {
+                    // Clear all input fields
+                    document.getElementById('vaultData').value = '';
+                    document.getElementById('vaultIv').value = '';
+                    document.getElementById('vaultKeyMetadata').value = '';
+                    document.getElementById('vaultSalt').value = '';
+                    document.getElementById('compiledOutput').innerHTML = 'Ready to compile your vault data...';
+                });
+                
+                // Initial compilation check
+                this.compileVaultData();
+            }
+
+            setupSnappyDecompression() {
+                // Remove any existing keydown event listeners
+                if (this.handleSnappyKeydown) {
+                    document.removeEventListener('keydown', this.handleSnappyKeydown);
+                }
+                
+                // Add keyboard shortcut for Alt + A
+                this.handleSnappyKeydown = (e) => {
+                    if (e.altKey && (e.key === 'a' || e.key === 'A')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.triggerSnappyDecompression();
+                    }
+                };
+                document.addEventListener('keydown', this.handleSnappyKeydown, true);
+                
+                // Add click handler for the Snappy Decomp button
+                if (this.snappyDecompBtn) {
+                    // Remove any existing click handlers
+                    const newBtn = this.snappyDecompBtn.cloneNode(true);
+                    this.snappyDecompBtn.parentNode.replaceChild(newBtn, this.snappyDecompBtn);
+                    this.snappyDecompBtn = newBtn;
+                    
+                    // Add single click handler
+                    this.snappyDecompBtn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.triggerSnappyDecompression();
+                    };
+                }
+            }
+
+            updateSnappyButtonState() {
+                if (this.file) {
+                    this.snappyDecompBtn.disabled = false;
+                    this.snappyDecompBtn.style.background = '#ff6b35';
+                    this.snappyDecompBtn.style.cursor = 'pointer';
+                } else {
+                    this.snappyDecompBtn.disabled = true;
+                    this.snappyDecompBtn.style.background = '#666666';
+                }
+            }
+
+            triggerSnappyDecompression() {
+                if (!this.file) {
+                    this.showNotification('Please select a file first', 'warning');
+                    return;
+                }
+                
+                // Check for unsupported file types for Snappy decompression
+                const fileName = this.file.name.toLowerCase();
+                if (fileName.endsWith('.txt') || fileName.endsWith('.ldb') || fileName.endsWith('.log')) {
+                    this.showNotification('Unsupported file type for Snappy decompression', 'warning');
+                    return;
+                }
+                
+                // Show the confirmation modal for supported files
+                const fileNameElement = document.getElementById('snappyFileName');
+                if (fileNameElement) {
+                    fileNameElement.innerHTML = `"<span style='color: #ff4444;'>${this.file.name}</span>"`;
+                }
+                this.snappyModal.style.display = 'flex';
+                
+                // Remove any existing click handlers to prevent duplicates
+                const newYesBtn = this.snappyYesBtn.cloneNode(true);
+                this.snappyYesBtn.parentNode.replaceChild(newYesBtn, this.snappyYesBtn);
+                this.snappyYesBtn = newYesBtn;
+                
+                const newNoBtn = this.snappyNoBtn.cloneNode(true);
+                this.snappyNoBtn.parentNode.replaceChild(newNoBtn, this.snappyNoBtn);
+                this.snappyNoBtn = newNoBtn;
+                
+                // Set up the yes button handler
+                this.snappyYesBtn.addEventListener('click', () => {
+                    this.performSnappyDecompression();
+                    this.closeSnappyModal();
+                }, { once: true });
+                
+                // Set up the no button handler
+                this.snappyNoBtn.addEventListener('click', () => {
+                    this.closeSnappyModal();
+                }, { once: true });
+            }
+            
+            closeSnappyModal() {
+                this.snappyModal.style.display = 'none';
+                // Vynulujeme zobrazený názov súboru pri zatvorení modálneho okna
+                const fileNameElement = document.getElementById('snappyFileName');
+                fileNameElement.textContent = '';
+            }
+
+            handleSnappyDecompression(event) {
+                // This method is kept for backward compatibility but is no longer used directly
+                // All functionality has been moved to triggerSnappyDecompression
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+                this.triggerSnappyDecompression();
+            }
+
+            async performSnappyDecompression() {
+                this.closeSnappyModal();
+                this.snappyDecompBtn.innerHTML = '<div class="loading"></div> Processing...';
+                this.snappyDecompBtn.disabled = true;
+                
+                // Store a reference to the current button state to restore it in case of error
+                const originalBtnHTML = this.snappyDecompBtn.innerHTML;
+                const originalBtnState = this.snappyDecompBtn.disabled;
+                
+                try {
+                    const fileData = await this.readFileAsArrayBuffer(this.file);
+                    const inputData = new Uint8Array(fileData);
+                    
+                    // Check for Firefox LZ4/Snappy header
+                    let currentPos = 0;
+                    if (inputData.length >= 10 && 
+                        inputData[0] === 0xFF && 
+                        inputData[1] === 0x06 && inputData[2] === 0x00 && inputData[3] === 0x00 &&
+                        String.fromCharCode(...inputData.slice(4, 10)) === 'sNaPpY') {
+                        currentPos = 10;
+                    }
+
+                    // Split into chunks and decompress
+                    const chunks = await this.splitIntoChunks(inputData, currentPos);
+                    const decompressedData = await this.decompressChunks(chunks);
+                    
+                    // Create a view of the decompressed data as Uint8Array
+                    const uint8Array = new Uint8Array(decompressedData.buffer || decompressedData);
+                    
+                    // Generate appropriate filename
+                    const newFileName = this.generateSmartName(this.file.name);
+                    
+                    // Check if decompressed data is empty
+                    if (uint8Array.length === 0) {
+                        throw new Error('Decompression resulted in an empty file (0 bytes). The file may be corrupted or not a valid Snappy archive.');
+                    }
+                    
+                    // Create blob directly from the array buffer
+                    const decompressedBlob = new Blob([uint8Array], { type: 'application/octet-stream' });
+                    const decompressedFile = new File([decompressedBlob], newFileName, { 
+                        type: 'application/octet-stream',
+                        lastModified: Date.now()
+                    });
+                    
+                    // Try to decode as text for display
+                    let displayText;
+                    try {
+                        displayText = new TextDecoder('windows-1250', { fatal: true }).decode(uint8Array);
+                    } catch (e) {
+                        displayText = new TextDecoder('utf-8', { fatal: false }).decode(uint8Array);
+                    }
+                    
+                    // Update UI with the file
+                    this.file = decompressedFile;
+                    this.fileContent = displayText;
+                    this.searchBtn.disabled = false;
+                    this.updateFileDisplay();
+                    
+                    // Calculate compression ratio
+                    const ratio = (1 - (decompressedData.length / fileData.byteLength)) * 100;
+                    const compressionRatio = Math.abs(ratio).toFixed(1);
+                    const direction = ratio >= 0 ? 'compressed' : 'expanded';
+                    this.showNotification(
+                        `Decompression successful! Data ${direction} by ${compressionRatio}%`,
+                        'success'
+                    );
+                    
+                    // Add download button
+                    this.addDownloadButton(decompressedFile);
+                    
+                } catch (error) {
+                    console.error('Decompression error:', error);
+                    this.showNotification('Decompression failed: ' + error.message, 'error');
+                } finally {
+                    // Restore button state
+                    this.snappyDecompBtn.innerHTML = '🗜️ Snappy Decompression';
+                    this.snappyDecompBtn.disabled = false;
+                }
+            }
+
+            async splitIntoChunks(inputData, currentPos) {
+                const chunks = [];
+                const totalInputSize = inputData.length;
+
+                while (currentPos < totalInputSize) {
+                    if (currentPos >= totalInputSize) break;
+
+                    const chunkType = inputData[currentPos];
+                    currentPos++;
+
+                    if (chunkType === 0x00) { // Compressed data chunk
+                        if (currentPos + 7 > totalInputSize) break;
+
+                        const compressedChunkLen = inputData[currentPos] | 
+                                                 (inputData[currentPos + 1] << 8) | 
+                                                 (inputData[currentPos + 2] << 16);
+                        currentPos += 3;
+                        currentPos += 4; // Skip CRC
+
+                        const actualCompressedDataLen = compressedChunkLen - 4;
+                        if (currentPos + actualCompressedDataLen > totalInputSize) break;
+
+                        const compressedDataBlock = inputData.slice(currentPos, currentPos + actualCompressedDataLen);
+                        currentPos += actualCompressedDataLen;
+
+                        const [uncompressedLength] = this.readVarint(compressedDataBlock, 0);
+                        chunks.push({
+                            data: compressedDataBlock,
+                            uncompressedLength: uncompressedLength
+                        });
+
+                    } else if (chunkType >= 0x80 && chunkType <= 0xfe) { // Skippable chunk
+                        if (currentPos + 3 > totalInputSize) break;
+                        const chunkLen = inputData[currentPos] | 
+                                      (inputData[currentPos + 1] << 8) | 
+                                      (inputData[currentPos + 2] << 16);
+                        currentPos += 3;
+                        if (currentPos + chunkLen > totalInputSize) break;
+                        currentPos += chunkLen;
+                    } else {
+                        break;
+                    }
+                }
+
+                return chunks;
+            }
+
+            async decompressChunks(chunks) {
+                // Predvypočítame celkovú veľkosť pre efektívnu alokáciu
+                let totalSize = 0;
+                const chunkInfo = [];
+                
+                // Prejdeme všetky chunky a zistime ich veľkosti
+                for (const chunk of chunks) {
+                    try {
+                        const [uncompressedLength] = this.readVarint(chunk.data, 0);
+                        totalSize += uncompressedLength;
+                        chunkInfo.push({
+                            data: chunk.data,
+                            uncompressedLength,
+                            varintBytes: this.readVarint(chunk.data, 0)[1]
+                        });
+                    } catch (error) {
+                        console.error('Error processing chunk:', error);
+                        throw new Error(`Invalid chunk format: ${error.message}`);
+                    }
+                }
+                
+                // Alokujeme jeden veľký buffer pre všetky dáta
+                const resultBuffer = new Uint8Array(totalSize);
+                let currentPosition = 0;
+                
+                // Spracujeme každý chunk a uložíme priamo do výsledného buffera
+                for (let i = 0; i < chunkInfo.length; i++) {
+                    const { data, uncompressedLength, varintBytes } = chunkInfo[i];
+                    const snappyDataForBlock = data.subarray(varintBytes);
+                    
+                    try {
+                        const decompressedData = this.simpleSnappyDecompress(
+                            snappyDataForBlock, 
+                            uncompressedLength
+                        );
+                        
+                        // Priame kopírovanie do výsledného buffera
+                        resultBuffer.set(decompressedData, currentPosition);
+                        currentPosition += decompressedData.length;
+                        
+                    } catch (error) {
+                        console.error(`Error decompressing chunk ${i + 1}:`, error);
+                        throw new Error(`Failed to decompress chunk ${i + 1}: ${error.message}`);
+                    }
+                }
+                
+                return resultBuffer;
+            }
+
+            readVarint(data, offset) {
+                let result = 0;
+                let shift = 0;
+                let pos = offset;
+                
+                while (pos < data.length) {
+                    const byte = data[pos++];
+                    result |= (byte & 0x7F) << shift;
+                    if ((byte & 0x80) === 0) break;
+                    shift += 7;
+                    if (shift >= 32) throw new Error('Invalid varint');
+                }
+                
+                return [result, pos - offset];
+            }
+
+            simpleSnappyDecompress(compressedData, uncompressedLength = compressedData.length * 4) {
+                // Predalokujeme výstupný buffer s horným odhadom veľkosti
+                const output = new Uint8Array(uncompressedLength);
+                let outputPos = 0;
+                let pos = 0;
+                const dataLength = compressedData.length;
+
+                while (pos < dataLength && outputPos < uncompressedLength) {
+                    if (pos >= dataLength) break;
+
+                    const tag = compressedData[pos++];
+
+                    if ((tag & 0x03) === 0x00) { // Literal
+                        let literalLength = (tag >> 2) + 1;
+                        
+                        // Spracovanie premenlivej dĺžky literálu
+                        if ((tag >> 2) >= 60) {
+                            const extraBytes = (tag >> 2) - 59;
+                            literalLength = 0;
+                            for (let i = 0; i < extraBytes && pos < dataLength; i++) {
+                                literalLength |= compressedData[pos++] << (i * 8);
+                            }
+                            literalLength += 1;
+                        }
+
+                        // Kontrola hraníc
+                        const remainingSpace = uncompressedLength - outputPos;
+                        const copyLength = Math.min(literalLength, dataLength - pos, remainingSpace);
+                        
+                        // Hromadné kopírovanie dát
+                        if (copyLength > 0) {
+                            output.set(compressedData.subarray(pos, pos + copyLength), outputPos);
+                            outputPos += copyLength;
+                            pos += copyLength;
+                        }
+
+                    } else {
+                        // Spracovanie kopírovacích inštrukcií
+                        let length, offset;
+                        
+                        if ((tag & 0x03) === 0x01) { // 1-byte offset
+                            if (pos >= dataLength) throw new Error("Error: Not enough data for 1-byte copy offset.");
+                            length = ((tag >> 2) & 0x07) + 4;
+                            offset = ((tag >> 5) << 8) | compressedData[pos++];
+                            
+                        } else if ((tag & 0x03) === 0x02) { // 2-byte offset
+                            if (pos + 1 >= dataLength) throw new Error("Error: Not enough data for 2-byte copy offset.");
+                            length = (tag >> 2) + 1;
+                            offset = compressedData[pos] | (compressedData[pos + 1] << 8);
+                            pos += 2;
+                            
+                        } else if ((tag & 0x03) === 0x03) { // 4-byte offset
+                            if (pos + 3 >= dataLength) throw new Error("Error: Not enough data for 4-byte copy offset.");
+                            length = (tag >> 2) + 1;
+                            offset = compressedData[pos] | 
+                                    (compressedData[pos + 1] << 8) | 
+                                    (compressedData[pos + 2] << 16) | 
+                                    (compressedData[pos + 3] << 24);
+                            pos += 4;
+                        } else {
+                            continue; // Neznámy tag, preskočíme
+                        }
+                        
+                        // Volanie optimalizovanej funkcie pre kopírovanie
+                        this.copyBytesOptimized(output, outputPos, offset, length);
+                        outputPos += length;
+                    }
+                }
+                
+                // Vrátime iba skutočne použitú časť buffera
+                return outputPos === uncompressedLength ? output : output.subarray(0, outputPos);
+            }
+
+            // Pôvodná implementácia pre spätnú kompatibilitu
+            copyBytes(output, offset, length) {
+                if (Array.isArray(output)) {
+                    // Stará verzia pre polia
+                    if (offset === 0 || offset > output.length) {
+                        for (let i = 0; i < length; i++) output.push(0);
+                        return;
+                    }
+                    
+                    const srcPos = output.length - offset;
+                    for (let i = 0; i < length; i++) {
+                        output.push((srcPos + i < output.length) ? output[srcPos + i] : 0);
+                    }
+                } else {
+                    // Volanie novej optimalizovanej verzie pre Uint8Array
+                    this.copyBytesOptimized(output, output.length, offset, length);
+                }
+            }
+            
+            // Nová optimalizovaná verzia pre Uint8Array
+            copyBytesOptimized(output, outputPos, offset, length) {
+                if (length === 0) return;
+                
+                const srcPos = outputPos - offset;
+                
+                // Ak je offset väčší ako aktuálna pozícia, vyplníme nulami
+                if (srcPos < 0) {
+                    const fillLength = Math.min(-srcPos, length);
+                    output.fill(0, outputPos, outputPos + fillLength);
+                    this.copyBytesOptimized(output, outputPos + fillLength, offset, length - fillLength);
+                    return;
+                }
+                
+                // Kopírovanie po blokoch pre maximálnu rýchlosť
+                const blockSize = 65536; // 64KB bloky pre lepšiu efektivitu
+                let remaining = length;
+                let currentSrcPos = srcPos;
+                let currentDstPos = outputPos;
+                
+                while (remaining > 0) {
+                    const copySize = Math.min(blockSize, remaining);
+                    const overlap = (currentDstPos > currentSrcPos) ? 
+                        Math.min(copySize, currentDstPos - currentSrcPos) : 0;
+                    
+                    // Kopírovanie s prekrytím po častiach
+                    if (overlap > 0) {
+                        for (let i = 0; i < overlap; i++) {
+                            output[currentDstPos + i] = output[currentSrcPos + i];
+                        }
+                        if (overlap < copySize) {
+                            output.copyWithin(currentDstPos + overlap, currentSrcPos + overlap, currentSrcPos + copySize);
+                        }
+                    } else {
+                        // Priame kopírovanie bez prekrytia
+                        output.copyWithin(currentDstPos, currentSrcPos, currentSrcPos + copySize);
+                    }
+                    
+                    currentSrcPos += copySize;
+                    currentDstPos += copySize;
+                    remaining -= copySize;
+                }
+            }
+
+            generateSmartName(originalName) {
+                const baseName = originalName.replace(/\.[^/.]+$/, '');
+                const extension = originalName.includes('.') ? originalName.split('.').pop() : '';
+                
+                if (originalName.includes('sessionstore') || originalName.includes('recovery')) {
+                    return `${baseName}_decompressed.json`;
+                }
+                
+                if (/^\d+$/.test(baseName)) {
+                    return `${baseName}.txt`;
+                }
+                
+                if (extension === 'jsonlz4' || extension === 'baklz4') {
+                    return `${baseName}_decompressed.json`;
+                }
+                
+                return `${baseName}_decom${extension ? '.' + extension : ''}`;
+            }
+
+            readFileAsArrayBuffer(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+
+            addDownloadButton(file) {
+                // Remove any existing download button
+                const existingBtn = document.getElementById('snappyDownloadBtn');
+                if (existingBtn) {
+                    existingBtn.remove();
+                }
+                
+                // Create new download button
+                const downloadBtn = document.createElement('a');
+                downloadBtn.id = 'snappyDownloadBtn';
+                downloadBtn.className = 'btn btn-small download-btn';
+                downloadBtn.innerHTML = '💾 Download File: ' + file.name;
+                downloadBtn.title = 'Download ' + file.name;
+                downloadBtn.href = URL.createObjectURL(file);
+                downloadBtn.download = file.name;
+                downloadBtn.style.marginTop = '10px';
+                downloadBtn.style.marginLeft = '10px';
+                
+                // Insert after the decompression button
+                this.snappyDecompBtn.parentNode.insertBefore(downloadBtn, this.snappyDecompBtn.nextSibling);
+            }
+
+            showNotification(message, type = 'info', playSound = true) {
+    // Create modal backdrop
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 10001;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    `;
+    
+    // Create modal content
+    const content = document.createElement('div');
+    content.style.cssText = `
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 12px;
+        padding: 30px;
+        max-width: 400px;
+        width: 90%;
+        text-align: center;
+        color: white;
+    `;
+    
+    // Set colors based on type
+    const colors = {
+        'success': '#10b981',
+        'error': '#dc2626', 
+        'warning': '#f59e0b',
+        'info': '#3b82f6'
+    };
+    
+    content.innerHTML = `
+        <div style="color: ${colors[type]}; font-size: 24px; margin-bottom: 15px;">
+            ${type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️'}
+        </div>
+        <h3 style="color: ${colors[type]}; margin-bottom: 20px;">
+            ${type === 'success' ? 'Success!' : type === 'error' ? 'Error!' : type === 'warning' ? 'Warning!' : 'Info'}
+        </h3>
+        <p style="color: #f5f5f5; margin-bottom: 25px; line-height: 1.4;">${message}</p>
+        <button id="modalOkBtn" style="
+            background: ${colors[type]};
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        ">OK</button>
+    `;
+    
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    // Handle OK button click
+    const okBtn = content.querySelector('#modalOkBtn');
+    okBtn.addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+    
+    // Handle ESC key
+    const handleEsc = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(modal);
+            document.removeEventListener('keydown', handleEsc);
+        }
+    };
+    document.addEventListener('keydown', handleEsc);
+    
+    // Play success sound only for success notifications and if playSound is true
+    if (type === 'success' && playSound) {
+        this.playSuccessSound();
+    }
+    
+    // Auto-focus OK button
+    setTimeout(() => okBtn.focus(), 100);
+    
+    // Auto-close after 5 seconds
+    setTimeout(() => {
+        if (document.body.contains(modal)) {
+            document.body.removeChild(modal);
+            document.removeEventListener('keydown', handleEsc);
+        }
+    }, 5000);
+}
+
+            playSuccessSound() {
+    // Prevent multiple simultaneous sounds
+    if (this.isPlayingSound) {
+        return;
+    }
+    this.isPlayingSound = true;
+    
+    console.log('Attempting to play success sound...');
+    try {
+        const audio = new Audio('sounds/uspech.mp3');
+        audio.volume = 0.5;
+        
+        // Reset flag when sound ends or fails
+        audio.addEventListener('ended', () => {
+            this.isPlayingSound = false;
+        });
+        
+        audio.addEventListener('error', (e) => {
+            console.log('MP3 audio error:', e);
+            this.isPlayingSound = false;
+        });
+        
+        audio.play().then(() => {
+            console.log('MP3 audio started playing successfully');
+        }).catch(error => {
+            console.log('Could not play MP3 success sound:', error);
+            this.isPlayingSound = false;
+        });
+    } catch (error) {
+        console.log('Error creating audio element:', error);
+        this.isPlayingSound = false;
+    }
+}
+
+            playDataFoundSound() {
+    // Prevent multiple simultaneous sounds
+    if (this.isPlayingSound) {
+        return;
+    }
+    this.isPlayingSound = true;
+    
+    console.log('Attempting to play data found sound...');
+    try {
+        const audio = new Audio('sounds/datafound.mp3');
+        audio.volume = 0.5;
+        
+        // Reset flag when sound ends or fails
+        audio.addEventListener('ended', () => {
+            this.isPlayingSound = false;
+        });
+        
+        audio.addEventListener('error', (e) => {
+            console.log('Data found MP3 audio error:', e);
+            this.isPlayingSound = false;
+        });
+        
+        audio.play().then(() => {
+            console.log('Data found MP3 audio started playing successfully');
+        }).catch(error => {
+            console.log('Could not play data found MP3 sound:', error);
+            this.isPlayingSound = false;
+        });
+    } catch (error) {
+        console.log('Error creating data found audio element:', error);
+        this.isPlayingSound = false;
+    }
+}
+
+            updateDecryptButtonState() {}
+
+            handleDragOver(e) {
+                e.preventDefault();
+                this.dragDropArea.classList.add("drag-over");
+            }
+
+            handleDragLeave(e) {
+                e.preventDefault();
+                this.dragDropArea.classList.remove("drag-over");
+            }
+
+            handleDrop(e) {
+                e.preventDefault();
+                this.dragDropArea.classList.remove("drag-over");
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.handleFile(files[0]);
+                }
+            }
+
+            handleFileSelect(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    this.handleFile(files[0]);
+                }
+            }
+
+            handleFile(file) {
+                this.file = file;
+                this.fileContent = null; // Clear cached content when new file is selected
+                this.updateFileDisplay();
+                this.searchBtn.disabled = false;
+                this.updateSnappyButtonState(); // Enable Snappy Decomp button when file is uploaded
+            }
+
+            updateFileDisplay() {
+                if (this.file) {
+                    this.fileName.textContent = this.file.name;
+                    this.fileSize.textContent = this.formatFileSize(this.file.size);
+                    this.uploadText.classList.add("hidden");
+                    this.fileInfo.classList.remove("hidden");
+                } else {
+                    this.uploadText.classList.remove("hidden");
+                    this.fileInfo.classList.add("hidden");
+                }
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return "0 Bytes";
+                const k = 1024;
+                const sizes = ["Bytes", "KB", "MB", "GB"];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+            }
+
+            renderKeywords() {
+                this.keywordsContainer.innerHTML = "";
+                this.keywords.forEach((keyword, index) => {
+                    const tag = document.createElement("div");
+                    tag.className = "keyword-tag";
+                    tag.innerHTML = `
+                        ${keyword}
+                        ${this.editingKeywords ? `<span class="keyword-remove" data-keyword="${keyword}">×</span>` : ""}
+                    `;
+                    this.keywordsContainer.appendChild(tag);
+                });
+
+                if (this.editingKeywords) {
+                    this.keywordsContainer.querySelectorAll(".keyword-remove").forEach(btn => {
+                        btn.addEventListener("click", (e) => {
+                            const keyword = e.target.dataset.keyword;
+                            this.removeKeyword(keyword);
+                        });
+                    });
+                }
+            }
+
+            toggleKeywordEditing() {
+                this.editingKeywords = !this.editingKeywords;
+                this.editKeywordsBtn.textContent = this.editingKeywords ? "✅ Done" : "✏️ Edit";
+                
+                if (this.editingKeywords) {
+                    this.keywordInputContainer.classList.remove("hidden");
+                } else {
+                    this.keywordInputContainer.classList.add("hidden");
+                    this.keywordInput.value = "";
+                }
+                
+                this.renderKeywords();
+            }
+
+            addKeyword() {
+                const keyword = this.keywordInput.value.trim();
+                if (keyword && !this.keywords.includes(keyword)) {
+                    this.keywords.push(keyword);
+                    this.keywordInput.value = "";
+                    this.renderKeywords();
+                    this.updateMinWordsDescription();
+                }
+            }
+
+            removeKeyword(keyword) {
+                this.keywords = this.keywords.filter(k => k !== keyword);
+                this.renderKeywords();
+                this.updateMinWordsDescription();
+                
+                if (this.minWordCount > this.keywords.length) {
+                    this.minWordCount = Math.max(1, this.keywords.length);
+                    this.minWordsInput.value = this.minWordCount;
+                    this.updateMinWordsDescription();
+                }
+            }
+
+            updateMinWords() {
+               this.minWordCount = parseInt(this.minWordsInput.value) || 1;
+               this.minWordCount = Math.max(1, Math.min(this.minWordCount, this.keywords.length));
+               this.minWordsInput.value = this.minWordCount;
+               this.updateMinWordsDescription();
+           }
+
+           updateMinWordsDescription() {
+               const plural = this.minWordCount !== 1 ? "s" : "";
+               const totalKeywords = this.keywords.length;
+               this.minWordsInput.max = totalKeywords;
+               
+               // Update dropdown options
+               this.minWordsInput.innerHTML = '';
+               for (let i = 1; i <= totalKeywords; i++) {
+                   const option = document.createElement('option');
+                   option.value = i;
+                   option.textContent = i;
+                   option.selected = (i === this.minWordCount);
+                   this.minWordsInput.appendChild(option);
+               }
+               
+               this.minWordsDescription.textContent = 
+                   `Lines must contain at least ${this.minWordCount} of ${totalKeywords} keyword${plural} to be included in results`;
+           }
+
+           async searchFile() {
+               if (!this.file) {
+                   this.showNotification('Please select a file first', 'warning');
+                   return;
+               }
+
+               // Only update the search button state, not the decompression button
+               this.searchBtn.disabled = true;
+               this.searchBtn.innerHTML = '<div class="loading"></div> Searching Vault Data...';
+               this.searchResults = [];
+               this.hasPlayedDataFoundSound = false; // Reset flag pred novým vyhľadávaním
+               this.updateResults();
+
+               try {
+                   // Use cached content if available
+                   let fileContent = this.fileContent;
+                   if (!fileContent) {
+                       fileContent = await this.readFileAsText(this.file);
+                       this.fileContent = fileContent; // Cache for future use
+                   }
+                   this.processFileContent(fileContent);
+               } catch (error) {
+                   console.error("Error processing file:", error);
+                   alert("Error processing file. Please try again.");
+               } finally {
+                   this.searchBtn.disabled = false;
+                   this.searchBtn.innerHTML = "🔍 Search Vault Data";
+               }
+           }
+
+           readFileAsText(file) {
+               return new Promise((resolve, reject) => {
+                   const reader = new FileReader();
+                   reader.onload = (e) => {
+                       resolve(e.target.result);
+                   };
+                   reader.onerror = (e) => {
+                       reject(e);
+                   };
+                   reader.readAsText(file);
+               });
+           }
+
+           processFileContent(content) {
+               const lines = content.split(/\r\n|\n|\r/);
+               const results = [];
+               const processedLines = new Set(); // Sledovanie už spracovaných riadkov
+               const contextSize = 3; // Počet riadkov pred a po (celkom ±3 = 7 riadkov)
+
+               // Kontextové vyhľadávanie
+               lines.forEach((line, index) => {
+                   // Preskočíme, ak už bol tento riadok spracovaný
+                   if (processedLines.has(index)) {
+                       return;
+                   }
+
+                   // Vytvoríme kontextové okno (±3 riadky)
+                   const startIdx = Math.max(0, index - contextSize);
+                   const endIdx = Math.min(lines.length - 1, index + contextSize);
+                   
+                   // Spojíme všetky riadky v kontexte
+                   const contextLines = [];
+                   for (let i = startIdx; i <= endIdx; i++) {
+                       contextLines.push(lines[i]);
+                   }
+                   const contextText = contextLines.join(' ');
+                   
+                   // Hľadáme keywords v celom kontexte
+                   const foundKeywords = this.keywords.filter(keyword => {
+                       // Pre "data" - hľadáme len ako samostatné slovo (nie v "keyMetadata")
+                       if (keyword === 'data') {
+                           return /\bdata\b/.test(contextText);
+                       }
+                       // Pre "iv" - hľadáme len ako samostatné slovo (nie v "private", "active" atď.)
+                       if (keyword === 'iv') {
+                           return /\biv\b/.test(contextText);
+                       }
+                       // Pre "salt" - case-insensitive vyhľadávanie v celom kontexte
+                       if (keyword === 'salt') {
+                           return /salt/i.test(contextText);
+                       }
+                       // Pre ostatné keywords - jednoduché vyhľadávanie
+                       return contextText.includes(keyword);
+                   });
+                   
+                   // Zoradíme keywords podľa priority - dôležité (data, iv, salt) vždy prvé
+                   const priorityKeywords = ['data', 'iv', 'salt'];
+                   const priority = foundKeywords.filter(k => priorityKeywords.includes(k));
+                   const others = foundKeywords.filter(k => !priorityKeywords.includes(k));
+                   const sortedKeywords = [...priority, ...others];
+                   
+                   // Zobrazíme len ak dosahuje minimálny počet keywords
+                   const meetsMinimum = sortedKeywords.length >= this.minWordCount;
+                   
+                   if (meetsMinimum) {
+                       // Extrahujeme vault data z kontextového textu
+                       const extractedContent = this.extractVaultData(contextText.trim());
+                       
+                       // Označíme všetky riadky v kontexte ako spracované (aby sa nezobrazovali duplicitne)
+                       for (let i = startIdx; i <= endIdx; i++) {
+                           processedLines.add(i);
+                       }
+                       
+                       results.push({
+                           lineNumber: index + 1,
+                           content: contextText.trim(),
+                           displayContent: extractedContent.content,
+                           fullContent: contextText.trim(),
+                           foundKeywords: sortedKeywords,
+                           matchCount: sortedKeywords.length,
+                           isExtracted: extractedContent.isExtracted,
+                           startIndex: extractedContent.startIndex,
+                           endIndex: extractedContent.endIndex,
+                           contextStart: startIdx + 1,
+                           contextEnd: endIdx + 1
+                       });
+                   }
+               });
+
+               // Zoradenie podľa počtu nájdených keywords
+               results.sort((a, b) => b.matchCount - a.matchCount);
+               
+               this.searchResults = results.slice(0, 50);
+               this.updateResults();
+           }
+
+           extractVaultData(line) {
+               const dataIndex = line.indexOf('"data"');
+               const lastBrace = line.lastIndexOf("}");
+               
+               // Flexibilnejšie vyhľadávanie "salt" - toleruje špeciálne znaky, ale case-sensitive
+               const hasSalt = /"salt[^"]*"|'salt[^']*'|\bsalt\b/.test(line);
+               
+               if (dataIndex !== -1 && lastBrace !== -1 && hasSalt) {
+                   let openBrace = -1;
+                   for (let i = dataIndex - 1; i >= 0; i--) {
+                       if (line[i] === "{") {
+                           openBrace = i;
+                           break;
+                       }
+                   }
+                   
+                   if (openBrace !== -1) {
+                       const extracted = line.substring(openBrace, lastBrace + 1);
+                       
+                       return {
+                           content: extracted,
+                           isExtracted: true,
+                           startIndex: openBrace,
+                           endIndex: lastBrace + 1
+                       };
+                   }
+               }
+               
+               const firstBrace = line.indexOf("{");
+               if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace && hasSalt) {
+                   const extracted = line.substring(firstBrace, lastBrace + 1);
+                   
+                   return {
+                       content: extracted,
+                       isExtracted: true,
+                       startIndex: firstBrace,
+                       endIndex: lastBrace + 1
+                   };
+               }
+               
+               return {
+                   content: line,
+                   isExtracted: false,
+                   startIndex: 0,
+                   endIndex: line.length
+               };
+           }
+
+           // Nová funkcia - zvýrazní keywords PRED escapovaním HTML
+           highlightKeywordsBeforeEscape(text, foundKeywords) {
+               // Použijeme špeciálny marker, ktorý sa nestratí pri escapovaní
+               const MARKER_START = '\u0001HIGHLIGHT_START\u0001';
+               const MARKER_END = '\u0001HIGHLIGHT_END\u0001';
+               
+               let markedText = text;
+               const sortedKeywords = [...foundKeywords].sort((a, b) => b.length - a.length);
+               
+               sortedKeywords.forEach(keyword => {
+                   if (keyword === 'salt') {
+                       // SUPER JEDNODUCHÝ prístup - nahraď každý výskyt "salt"
+                       markedText = markedText.replace(/salt/g, `${MARKER_START}salt${MARKER_END}`);
+                   } else {
+                       // Pre ostatné keywords - presné vyhľadávanie
+                       const regex = new RegExp(`(${this.escapeRegex(keyword)})`, "g");
+                       markedText = markedText.replace(regex, `${MARKER_START}$1${MARKER_END}`);
+                   }
+               });
+               
+               // Teraz escapujeme HTML
+               const escapedText = this.escapeHtml(markedText);
+               
+               // Nahradíme markery HTML tagmi
+               const finalText = escapedText
+                   .replace(/\u0001HIGHLIGHT_START\u0001/g, '<span class="highlight">')
+                   .replace(/\u0001HIGHLIGHT_END\u0001/g, '</span>');
+               
+               return finalText;
+           }
+
+           highlightKeywords(text, foundKeywords) {
+               let highlightedText = text;
+               
+               const sortedKeywords = [...foundKeywords].sort((a, b) => b.length - a.length);
+               
+               sortedKeywords.forEach(keyword => {
+                   // Pre "salt" používame špeciálny regex, ktorý zachytí aj špeciálne znaky
+                   if (keyword === 'salt') {
+                       // Hľadáme "salt" so špeciálnymi znakmi - podporuje aj HTML entity
+                       // Vzor: &quot;salt...&quot; alebo "salt..." alebo 'salt...' alebo salt
+                       const saltRegex = /(&quot;|")salt[^"&]*(&quot;|")|(&apos;|')salt[^'&]*(&apos;|')|\bsalt\b/g;
+                       highlightedText = highlightedText.replace(saltRegex, (match) => {
+                           return `<span class="highlight">${match}</span>`;
+                       });
+                   } else {
+                       // Pre ostatné keywords - presné vyhľadávanie (case-sensitive, iba "g" flag)
+                       const regex = new RegExp(`(${this.escapeRegex(keyword)})`, "g");
+                       highlightedText = highlightedText.replace(regex, '<span class="highlight">$1</span>');
+                   }
+               });
+               
+               return highlightedText;
+           }
+
+           escapeRegex(string) {
+               return string.replace(/[.*+?^${}()|[\\\]]/g, "\\$&");
+           }
+
+           updateResults(selectedIndex = 0) {
+               if (this.searchResults.length === 0) {
+                   this.resultsContainer.innerHTML = `
+                       <div class="no-results">
+                           <div class="no-results-icon">⚠️</div>
+                           <p>No results found. Upload a file and search to see results here.</p>
+                       </div>
+                   `;
+                   this.resultsCount.classList.add("hidden");
+               } else {
+                   // Prehrať datafound.mp3 len raz po prvom zobrazení výsledkov
+                   if (!this.hasPlayedDataFoundSound) {
+                       this.playDataFoundSound();
+                       this.hasPlayedDataFoundSound = true;
+                   }
+                   
+                   this.resultsCount.classList.remove("hidden");
+                   
+                   // Vytvoríme tlačítka s číslami
+                   const resultButtons = this.searchResults.map((_, index) => {
+                       const isActive = index === selectedIndex;
+                       return `<button class="result-number-btn ${isActive ? 'active' : ''}" onclick="vaultExtractor.updateResults(${index})">${index + 1}</button>`;
+                   }).join('');
+                   
+                   this.resultsCount.innerHTML = `
+                       <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-left: 25px;">
+                           <span style="font-weight: bold; color: #ff6b35; font-size: 1.3rem;">Result:</span>
+                           ${resultButtons}
+                       </div>
+                   `;
+                   
+                   // Zobrazíme len vybraný výsledok
+                   const result = this.searchResults[selectedIndex];
+                   this.resultsContainer.innerHTML = `
+                       <div class="results-container">
+                           <div class="result-item">
+                               <div class="result-header">
+                                   <div class="line-number">Line: ${result.lineNumber}</div>
+                                   <div class="result-matches">
+                                       ${result.foundKeywords.map(keyword => 
+                                           `<span class="match-tag">${keyword}</span>`
+                                       ).join("")}
+                                   </div>
+                               </div>
+                               <div class="result-content" id="result-content-${selectedIndex}">${this.highlightKeywords(this.escapeHtml(this.removeBackslashes(result.displayContent)), result.foundKeywords)}</div>
+                               <div style="display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap;">
+                                   <button class="expand-btn" onclick="vaultExtractor.showFullFile(${result.lineNumber})">
+                                       📖 View full file
+                                   </button>
+                                   <button class="auto-detect-data-btn" onclick="vaultExtractor.autoDetectData(${selectedIndex})">
+                                       ✨ Auto-detect "data"
+                                   </button>
+                                   <button class="auto-detect-iv-btn" onclick="vaultExtractor.autoDetectIv(${selectedIndex})">
+                                       ✨ Auto-detect "iv"
+                                   </button>
+                                   <button class="auto-detect-salt-btn" onclick="vaultExtractor.autoDetectSalt(${selectedIndex})">
+                                       ✨ Auto-detect "salt"
+                                   </button>
+                               </div>
+                           </div>
+                       </div>
+                   `;
+               }
+           }
+
+           escapeHtml(text) {
+               const div = document.createElement("div");
+               div.textContent = text;
+               return div.innerHTML;
+           }
+
+           removeBackslashes(text) {
+               return text.replace(/\\/g, "");
+           }
+
+           autoDetectData(resultIndex) {
+               // Získame aktuálny výsledok
+               const result = this.searchResults[resultIndex];
+               if (!result) return;
+
+               // Získame obsah bez backslashov
+               const content = this.removeBackslashes(result.displayContent);
+               
+               // Hľadáme najdlhší base64 string (to je pravdepodobne "data")
+               // Base64 regex: [A-Za-z0-9+/]+=* (môže končiť s =)
+               const base64Regex = /[A-Za-z0-9+\/]{100,}={0,2}/g;
+               const matches = content.match(base64Regex);
+               
+               if (!matches || matches.length === 0) {
+                   this.showNotification('❌ No "data" field detected. Could not find a long base64 string.', 'error');
+                   return;
+               }
+               
+               // Nájdeme najdlhší match (to je pravdepodobne "data")
+               const longestMatch = matches.reduce((a, b) => a.length > b.length ? a : b);
+               
+               // Označíme ho tmavo-fialovo v UI
+               const contentElement = document.getElementById(`result-content-${resultIndex}`);
+               if (contentElement) {
+                   const highlightedContent = contentElement.innerHTML.replace(
+                       new RegExp(this.escapeRegex(longestMatch), 'g'),
+                       `<span style="background: rgba(107, 53, 255, 0.3); padding: 2px 4px; border-radius: 3px;">${longestMatch}</span>`
+                   );
+                   contentElement.innerHTML = highlightedContent;
+               }
+               
+               // Skopírujeme do Data Compiler
+               this.vaultData.value = longestMatch;
+               
+               // Scroll na Data Compiler
+               this.vaultData.scrollIntoView({ behavior: 'smooth', block: 'center' });
+               
+               // Flash efekt
+               this.vaultData.style.background = 'rgba(107, 53, 255, 0.2)';
+               setTimeout(() => {
+                   this.vaultData.style.background = '#2a2a2a';
+               }, 1000);
+               
+               // Automaticky skompilujeme vault data
+               setTimeout(() => this.compileVaultData(), 100);
+               
+               // Zobrazíme modálne okno (bez zvuku)
+               this.showNotification('✨ "data" field detected and copied to Data Compiler!', 'success', false);
+           }
+
+           autoDetectIv(resultIndex) {
+               // Získame aktuálny výsledok
+               const result = this.searchResults[resultIndex];
+               if (!result) return;
+
+               // Získame obsah bez backslashov
+               const content = this.removeBackslashes(result.displayContent);
+               
+               // Najprv nájdeme data (najdlhší base64) aby sme ho vylúčili
+               const dataRegex = /[A-Za-z0-9+\/]{100,}={0,2}/g;
+               const dataMatches = content.match(dataRegex);
+               const dataString = dataMatches ? dataMatches.reduce((a, b) => a.length > b.length ? a : b) : '';
+               
+               // Hľadáme base64 string presne 24 znakov (to je "iv")
+               // Vylúčime substring z data
+               const ivRegex = /[A-Za-z0-9+\/]{22}={0,2}/g;
+               const matches = content.match(ivRegex);
+               
+               if (!matches || matches.length === 0) {
+                   this.showNotification('❌ No "iv" field detected. Could not find a 24-character base64 string.', 'error');
+                   return;
+               }
+               
+               // Nájdeme prvý match ktorý NIE JE súčasťou data
+               const ivMatch = matches.find(m => !dataString.includes(m));
+               
+               if (!ivMatch) {
+                   this.showNotification('❌ No "iv" field detected. All matches are part of data field.', 'error');
+                   return;
+               }
+               
+               // Označíme ho tmavo-hnedo v UI
+               const contentElement = document.getElementById(`result-content-${resultIndex}`);
+               if (contentElement) {
+                   const highlightedContent = contentElement.innerHTML.replace(
+                       new RegExp(this.escapeRegex(ivMatch), 'g'),
+                       `<span style="background: rgba(120, 53, 15, 0.3); padding: 2px 4px; border-radius: 3px;">${ivMatch}</span>`
+                   );
+                   contentElement.innerHTML = highlightedContent;
+               }
+               
+               // Skopírujeme do Data Compiler
+               this.vaultIv.value = ivMatch;
+               
+               // Scroll na Data Compiler
+               this.vaultIv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+               
+               // Flash efekt
+               this.vaultIv.style.background = 'rgba(120, 53, 15, 0.2)';
+               setTimeout(() => {
+                   this.vaultIv.style.background = '#2a2a2a';
+               }, 1000);
+               
+               // Automaticky skompilujeme vault data
+               setTimeout(() => this.compileVaultData(), 100);
+               
+               // Zobrazíme modálne okno (bez zvuku)
+               this.showNotification('✨ "iv" field detected and copied to Data Compiler!', 'success', false);
+           }
+
+           autoDetectSalt(resultIndex) {
+               // Získame aktuálny výsledok
+               const result = this.searchResults[resultIndex];
+               if (!result) return;
+
+               // Získame obsah bez backslashov
+               const content = this.removeBackslashes(result.displayContent);
+               
+               // Najprv nájdeme data (najdlhší base64) aby sme ho vylúčili
+               const dataRegex = /[A-Za-z0-9+\/]{100,}={0,2}/g;
+               const dataMatches = content.match(dataRegex);
+               const dataString = dataMatches ? dataMatches.reduce((a, b) => a.length > b.length ? a : b) : '';
+               
+               // Hľadáme base64 string 32-44 znakov (to je "salt")
+               // Vylúčime substring z data
+               const saltRegex = /[A-Za-z0-9+\/]{32,44}={0,2}/g;
+               const matches = content.match(saltRegex);
+               
+               if (!matches || matches.length === 0) {
+                   this.showNotification('❌ No "salt" field detected. Could not find a 32-44 character base64 string.', 'error');
+                   return;
+               }
+               
+               // Nájdeme najkratší match ktorý NIE JE súčasťou data
+               const validMatches = matches.filter(m => !dataString.includes(m));
+               
+               if (validMatches.length === 0) {
+                   this.showNotification('❌ No "salt" field detected. All matches are part of data field.', 'error');
+                   return;
+               }
+               
+               const saltMatch = validMatches.reduce((a, b) => a.length < b.length ? a : b);
+               
+               // Označíme ho tmavo-zeleno v UI
+               const contentElement = document.getElementById(`result-content-${resultIndex}`);
+               if (contentElement) {
+                   const highlightedContent = contentElement.innerHTML.replace(
+                       new RegExp(this.escapeRegex(saltMatch), 'g'),
+                       `<span style="background: rgba(6, 95, 70, 0.3); padding: 2px 4px; border-radius: 3px;">${saltMatch}</span>`
+                   );
+                   contentElement.innerHTML = highlightedContent;
+               }
+               
+               // Skopírujeme do Data Compiler
+               this.vaultSalt.value = saltMatch;
+               
+               // Scroll na Data Compiler
+               this.vaultSalt.scrollIntoView({ behavior: 'smooth', block: 'center' });
+               
+               // Flash efekt
+               this.vaultSalt.style.background = 'rgba(6, 95, 70, 0.2)';
+               setTimeout(() => {
+                   this.vaultSalt.style.background = '#2a2a2a';
+               }, 1000);
+               
+               // Automaticky skompilujeme vault data
+               setTimeout(() => this.compileVaultData(), 100);
+               
+               // Zobrazíme modálne okno (bez zvuku)
+               this.showNotification('✨ "salt" field detected and copied to Data Compiler!', 'success', false);
+           }
+
+           privateKeyToAddress(privateKey) {}
+
+           // Optimized showFullFile with virtual scrolling and progressive loading
+           async showFullFile(highlightLine = null) {
+               if (!this.file) return;
+
+               // Show loading modal with progress
+               const loadingModal = document.createElement("div");
+               loadingModal.className = "loading-modal";
+               loadingModal.innerHTML = `
+                   <div class="loading-content">
+                       <div class="loading-spinner"></div>
+                       <div class="loading-text">Loading file...</div>
+                       <div class="progress-bar">
+                           <div class="progress-fill" id="progressFill"></div>
+                       </div>
+                   </div>
+               `;
+               document.body.appendChild(loadingModal);
+               loadingModal.style.display = "block";
+
+               const progressFill = loadingModal.querySelector("#progressFill");
+               const loadingText = loadingModal.querySelector(".loading-text");
+
+               try {
+                   // Update progress
+                   progressFill.style.width = "20%";
+                   loadingText.textContent = "Reading file...";
+
+                   // Use cached content if available
+                   let fileContent = this.fileContent;
+                   if (!fileContent) {
+                       fileContent = await this.readFileAsText(this.file);
+                       this.fileContent = fileContent; // Cache for future use
+                   }
+
+                   progressFill.style.width = "50%";
+                   loadingText.textContent = "Processing content...";
+
+                   // Split into lines
+                   const lines = fileContent.split(/\r\n|\n|\r/);
+                   this.currentLines = lines;
+                   const totalLines = lines.length;
+
+                   progressFill.style.width = "70%";
+                   loadingText.textContent = "Preparing display...";
+
+                   // Hide loading modal
+                   loadingModal.remove();
+
+                   // Create optimized modal with virtual scrolling for large files
+                   const modal = document.createElement("div");
+                   modal.className = "modal";
+                   
+                   modal.innerHTML = `
+                       <div class="modal-content">
+                           <div class="modal-header">
+                               <h3>📄 ${this.file.name} (${totalLines.toLocaleString()} lines)</h3>
+                               <button class="close-btn" onclick="this.closest('.modal').remove()">✕ Close</button>
+                           </div>
+                           <div class="file-viewer" id="fileViewer">
+                               <div style="text-align: center; padding: 20px; color: #a0a0a0;">
+                                   <div class="loading-spinner" style="width: 20px; height: 20px; margin: 0 auto 10px;"></div>
+                                   Rendering content...
+                               </div>
+                           </div>
+                           <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
+                               <input type="text" id="findInput" class="input" placeholder="Find text..." style="flex:1;" />
+                               <button id="findBtn" class="btn btn-small">Find</button>
+                           </div>
+                       </div>
+                   `;
+                   
+                   document.body.appendChild(modal);
+                   modal.style.display = "block";
+                   
+                   // Render content in chunks to avoid blocking UI
+                   this.currentViewer = modal.querySelector("#fileViewer");
+                   await this.renderChunkedContent(this.currentViewer, lines, highlightLine, this.currentFindQuery);
+
+                   // Wire up Find
+                   const findInput = modal.querySelector('#findInput');
+                   const findBtn = modal.querySelector('#findBtn');
+                   const triggerFind = async () => {
+                       this.currentFindQuery = (findInput.value || "").trim();
+                       if (this.currentViewer && this.currentLines) {
+                           await this.renderChunkedContent(this.currentViewer, this.currentLines, highlightLine, this.currentFindQuery);
+                           // After render, scroll to first match
+                           const firstMatch = this.currentViewer.querySelector('.find-highlight');
+                           if (firstMatch) {
+                               firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                           } else if (this.currentFindQuery) {
+                               // optional feedback
+                               // alert('No matches found');
+                           }
+                       }
+                   };
+                   findBtn.addEventListener('click', triggerFind);
+                   findInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') triggerFind(); });
+
+                   // Close modal when clicking outside content
+                   modal.addEventListener("click", (e) => {
+                       if (e.target === modal) {
+                           modal.remove();
+                       }
+                   });
+
+               } catch (error) {
+                   loadingModal.remove();
+                   alert("Error loading file: " + error.message);
+               }
+           }
+
+           // Render content in chunks for better performance
+           async renderChunkedContent(viewer, lines, highlightLine, findQuery = "") {
+               const chunkSize = 1000; // Process 1000 lines at a time
+               const totalChunks = Math.ceil(lines.length / chunkSize);
+               
+               viewer.innerHTML = "";
+               let highlightedElement = null;
+               let hasScrolledToHighlight = false;
+               let hasScrolledToFind = false;
+               
+               for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                   const startIdx = chunkIndex * chunkSize;
+                   const endIdx = Math.min(startIdx + chunkSize, lines.length);
+                   
+                   // Create document fragment for better performance
+                   const fragment = document.createDocumentFragment();
+                   
+                   for (let i = startIdx; i < endIdx; i++) {
+                       const line = lines[i];
+                       const lineNumber = i + 1;
+                       const cleanLine = this.removeBackslashes(line);
+                       
+                       // Nájdeme, ktoré keywords sú v tomto riadku
+                       // Používame ROVNAKÚ logiku ako pri vyhľadávaní
+                       const foundInLine = this.keywords.filter(keyword => {
+                           // Pre "data" - len ako samostatné slovo
+                           if (keyword === 'data') {
+                               return /\bdata\b/.test(cleanLine);
+                           }
+                           // Pre "iv" - len ako samostatné slovo (nie v "private", "active" atď.)
+                           if (keyword === 'iv') {
+                               return /\biv\b/.test(cleanLine);
+                           }
+                           // Pre ostatné keywords vrátane "salt"
+                           return cleanLine.includes(keyword);
+                       });
+                       
+                       // Zvýrazníme PRED escapovaním HTML pre lepšiu presnosť
+                       let highlightedLine = this.highlightKeywordsBeforeEscape(cleanLine, foundInLine);
+                       if (findQuery) {
+                           try {
+                               const re = new RegExp(`(${this.escapeRegex(findQuery)})`, 'gi');
+                               highlightedLine = highlightedLine.replace(re, '<span class="find-highlight">$1</span>');
+                           } catch (e) {
+                               // ignore invalid regex edge cases
+                           }
+                       }
+                       const isHighlightLine = highlightLine && lineNumber === highlightLine;
+                       
+                       // Skontrolujeme, či tento riadok má nejaké keywords (zvýrazníme všetky riadky s keywords)
+                       const isResultLine = foundInLine.length > 0;
+                       
+                       const lineDiv = document.createElement("div");
+                       lineDiv.className = `file-line${isHighlightLine ? " highlight-line" : ""}${isResultLine ? " result-line" : ""}`;
+                       lineDiv.innerHTML = highlightedLine;
+                       
+                       if (isHighlightLine) {
+                           highlightedElement = lineDiv;
+                       }
+                       
+                       fragment.appendChild(lineDiv);
+                   }
+                   
+                   viewer.appendChild(fragment);
+                   
+                   // As soon as the highlighted line exists in DOM, scroll to it
+                   if (!hasScrolledToHighlight && highlightedElement) {
+                       highlightedElement.scrollIntoView({ behavior: "smooth", block: "center" });
+                       hasScrolledToHighlight = true;
+                   }
+
+                   // If there's a find query, scroll to first match as soon as it appears
+                   if (findQuery && !hasScrolledToFind) {
+                       const firstMatch = viewer.querySelector('.find-highlight');
+                       if (firstMatch) {
+                           firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                           hasScrolledToFind = true;
+                       }
+                   }
+                   
+                   // Allow UI to update between chunks
+                   if (chunkIndex < totalChunks - 1) {
+                       await new Promise(resolve => setTimeout(resolve, 10));
+                   }
+               }
+               
+               // Scroll to highlighted line
+               if (highlightLine && !hasScrolledToHighlight) {
+                   setTimeout(() => {
+                       const el = viewer.querySelector(".highlight-line");
+                       if (el) {
+                           el.scrollIntoView({ behavior: "smooth", block: "center" });
+                       }
+                   }, 100);
+               }
+           }
+
+           updateCompileState() {
+               const hasData = this.vaultData.value.trim() !== "" && 
+                             this.vaultIv.value.trim() !== "" && 
+                             this.vaultKeyMetadata.value.trim() !== "" &&
+                             this.vaultSalt.value.trim() !== "";
+               
+               const isSaltValid = this.validateSalt();
+               this.compileBtn.disabled = !hasData || !isSaltValid;
+               
+               // Update button style based on state
+               if (this.compileBtn.disabled) {
+                   this.compileBtn.classList.add('btn-disabled');
+               } else {
+                   this.compileBtn.classList.remove('btn-disabled');
+               }
+           }
+
+           compileVaultData() {
+               const data = this.vaultData.value.trim();
+               const iv = this.vaultIv.value.trim();
+               const keyMetadata = this.vaultKeyMetadata.value.trim();
+               const salt = this.vaultSalt.value.trim();
+
+               if (!data && !iv && !keyMetadata && !salt) {
+                   this.compiledOutput.textContent = "Ready to compile your vault data...";
+                   return;
+               }
+
+                this.validateIv();
+                this.validateSalt();
+
+               const vaultObject = {};
+               if (data) vaultObject.data = data;
+               if (iv) vaultObject.iv = iv;
+               if (keyMetadata) {
+                   try {
+                       vaultObject.keyMetadata = JSON.parse(keyMetadata);
+                   } catch (e) {
+                       vaultObject.keyMetadata = keyMetadata;
+                   }
+               }
+               if (salt) vaultObject.salt = salt;
+
+               this.compiledOutput.textContent = JSON.stringify(vaultObject, null, 2);
+           }
+
+           isBase64String(str) {
+               // Accept common base64 charset
+               return /^[A-Za-z0-9+/=]*$/.test(str);
+           }
+
+           validateIv() {
+               const value = (this.vaultIv.value || "").trim();
+               const ok = (value.length === 24) && this.isBase64String(value);
+               if (!ok && value.length > 0) {
+                   this.vaultIv.classList.add("input-error");
+                   this.vaultIvError.style.display = "block";
+               } else {
+                   this.vaultIv.classList.remove("input-error");
+                   this.vaultIvError.style.display = "none";
+               }
+               return ok || value.length === 0; // allow empty field
+           }
+
+           validateSalt() {
+               const value = (this.vaultSalt.value || "").trim();
+               const ok = (value.length === 44) && this.isBase64String(value);
+               if (!ok && value.length > 0) {
+                   this.vaultSalt.classList.add("input-error");
+                   this.vaultSaltError.style.display = "block";
+               } else {
+                   this.vaultSalt.classList.remove("input-error");
+                   this.vaultSaltError.style.display = "none";
+               }
+               return ok || value.length === 0; // allow empty field
+           }
+
+           updateCompileState() {
+               this.validateIv();
+               this.validateSalt();
+               // The compile button should always be enabled to allow compilation even with invalid IV or Salt.
+               this.compileBtn.disabled = false;
+           }
+
+           validateBase64(str, expectedLength) {
+               if (!str || str.length !== expectedLength) return false;
+               const base64Regex = /^[A-Za-z0-9+/=]+$/;
+               return base64Regex.test(str);
+           }
+
+           async copyCompiledData() {
+               const output = this.compiledOutput.textContent;
+               if (output && !output.includes('will appear here') && !output.includes('Ready to compile')) {
+                   try {
+                       await navigator.clipboard.writeText(output);
+                       const originalText = this.copyCompiledBtn.textContent;
+                       this.copyCompiledBtn.textContent = '✅ Copied!';
+                       setTimeout(() => {
+                           this.copyCompiledBtn.textContent = originalText;
+                       }, 2000);
+                   } catch (err) {
+                       console.error('Failed to copy text: ', err);
+                       alert('Failed to copy to clipboard');
+                   }
+               } else {
+                   this.showNotification('No compiled data available to copy', 'warning');
+               }
+           }
+
+           saveCompiledData() {
+               const output = this.compiledOutput.textContent;
+               if (output && !output.includes('will appear here') && !output.includes('Ready to compile')) {
+                   const blob = new Blob([output], { type: 'text/plain' });
+                   const url = URL.createObjectURL(blob);
+                   const a = document.createElement('a');
+                   a.href = url;
+                   a.download = 'vault-data-' + new Date().toISOString().slice(0, 10) + '.txt';
+                   document.body.appendChild(a);
+                   a.click();
+                   document.body.removeChild(a);
+                   URL.revokeObjectURL(url);
+               } else {
+                   this.showNotification('No compiled data available to save', 'warning');
+               }
+           }
+
+           async decryptVaultData() {}
+
+           async loadCryptoJS() {}
+
+           parseVaultData(data) {}
+
+           base64ToArrayBuffer(base64) {}
+
+           async performActualDecryption(password, vault) {}
+
+           displayDecryptedData(walletData) {}
+
+           copyDecryptedData() {}
+
+           saveDecryptedData() {}
+
+           clearDecryptor() {}
+       }
+
+       // Expose class on window for external scripts
+       window.VaultExtractor = VaultExtractor;
+
+       // Initialize the application
+       let vaultExtractor;
+       document.addEventListener("DOMContentLoaded", () => {
+           vaultExtractor = new VaultExtractor();
+       });
+   </script>
+   <script src="js/vault-decryptor.js"></script>
+  </body>
+  </html>
