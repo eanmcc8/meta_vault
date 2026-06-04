@@ -3,10 +3,10 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>MetaMask Vault Finder</title>
+		<title>Wallet Vault Finder</title>
 		<link rel="icon" type="image/x-icon" href="icon.ico" />
 		<link rel="stylesheet" href="styles.css" />
-		<script src="https://cdn.jsdelivr.net/npm/@web3modal/ethers@3.0.3/dist/index.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 	</head>
 	<body>
@@ -120,7 +120,7 @@
 								id="keywordInput"
 								placeholder="Add new keyword..."
 							/>
-							<button class="btn btn-small" id="addKeywordBtn">
+							<button class="btn btn-small no" id="addKeywordBtn">
 								Add
 							</button>
 						</div>
@@ -524,12 +524,12 @@
 						height: 100%;
 					"
 				>
-					<span>MetaMask Vault Finder v1.55</span>
+					<span>Wallet Vault Finder v1.55</span>
 				</div>
 			</div>
 		</div>
 
-		<!-- Snappy Decompression Modal -->
+			<!-- Snappy Decompression Modal -->
 		<div id="snappyModal" class="snappy-modal">
 			<div class="snappy-modal-content">
 				<span class="snappy-modal-icon">🗜️</span>
@@ -597,10 +597,12 @@
 						"access_token",
 						"seed",
 						"phrase",
-						"mnemonic"
+						"mnemonic",
+						"private",
+						"private_key"
 					];
 					// Povinné keywords - musia byť prítomné v každom výsledku
-					this.requiredKeywords = ["data", "iv", "salt"];
+					this.requiredKeywords = ["salt"];
 					this.editingKeywords = false;
 					this.minWordCount = 4;
 					this.searchResults = [];
